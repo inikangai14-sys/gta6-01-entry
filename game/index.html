@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Solmar Bay — an open-world crime game</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0e1a24; font-family: 'Segoe UI', Arial, sans-serif; }
+  #game-canvas { display: block; width: 100%; height: 100%; }
+  .hud { position: absolute; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8); pointer-events: none; z-index: 5; }
+  /* top-right: health, cash, stars, clock */
+  #stats { top: 14px; right: 16px; text-align: right; }
+  #health-bar { width: 210px; height: 14px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.5); border-radius: 3px; margin-left: auto; }
+  #health-fill { height: 100%; width: 100%; background: #2ecc71; border-radius: 2px; }
+  #health-text { font-size: 12px; font-weight: bold; margin-top: 2px; }
+  #cash { font-size: 26px; font-weight: 800; color: #7dff9a; margin-top: 6px; }
+  #stars { font-size: 26px; letter-spacing: 3px; margin-top: 2px; }
+  #stars .star { color: rgba(255,255,255,.25); }
+  #stars .star.on { color: #ffd700; }
+  #clock { font-size: 15px; font-weight: bold; margin-top: 2px; }
+  /* top-center: objective + mission timer */
+  #objective { top: 14px; left: 50%; transform: translateX(-50%); text-align: center; background: rgba(0,0,0,.55); padding: 8px 18px; border-radius: 6px; max-width: 560px; }
+  #objective-text { font-size: 15px; font-weight: bold; }
+  #mission-timer { font-size: 20px; font-weight: 800; color: #ffe9a8; margin-top: 2px; }
+  /* bottom-left: minimap */
+  #minimap-wrap { left: 16px; bottom: 16px; border: 2px solid rgba(255,255,255,.65); border-radius: 50%; overflow: hidden; width: 190px; height: 190px; box-shadow: 0 2px 12px rgba(0,0,0,.6); }
+  #minimap { width: 190px; height: 190px; display: block; }
+  #minimap-label { left: 16px; bottom: 210px; font-size: 12px; font-weight: bold; letter-spacing: 2px; color: #ffe9a8; }
+  /* bottom-right: speed */
+  #speed { right: 20px; bottom: 20px; font-size: 30px; font-weight: 800; color: #fff; }
+  /* bottom-center: flash messages */
+  #flash { bottom: 26px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: bold; background: rgba(0,0,0,.6); padding: 8px 16px; border-radius: 6px; opacity: 0; transition: opacity .4s; white-space: nowrap; }
+  /* crosshair */
+  #crosshair { top: 50%; left: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; display: none; }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: 8px; top: 0; width: 2px; height: 18px; }
+  #crosshair::after { top: 8px; left: 0; width: 18px; height: 2px; }
+  /* mission banner */
+  #banner { top: 22%; left: 50%; transform: translateX(-50%); text-align: center; display: none; }
+  #banner-title { font-size: 44px; font-weight: 900; letter-spacing: 3px; }
+  #banner-sub { font-size: 18px; margin-top: 6px; background: rgba(0,0,0,.55); padding: 6px 14px; border-radius: 6px; display: inline-block; }
+  /* mission briefing card */
+  #briefing { top: 110px; left: 16px; width: 320px; background: rgba(0,0,0,.65); border-left: 5px solid #f2c230; padding: 12px 14px; border-radius: 4px; display: none; }
+  #briefing-title { font-size: 16px; font-weight: 800; color: #f2c230; }
+  #briefing-text { font-size: 14px; margin-top: 6px; line-height: 1.45; }
+  /* damage vignette */
+  #damage { position: absolute; inset: 0; pointer-events: none; z-index: 4; opacity: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(200,0,0,.55) 100%); transition: opacity .15s; }
+  /* full-screen menus */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #fff; z-index: 10; background: linear-gradient(180deg, rgba(10,30,50,.82), rgba(20,10,40,.88)); }
+  .screen h1 { font-size: 64px; margin: 0; letter-spacing: 4px; color: #ffd76e; text-shadow: 0 4px 0 #b3541e, 0 8px 24px rgba(0,0,0,.7); }
+  .screen h2 { font-size: 20px; font-weight: 400; margin: 10px 0 0; color: #cfe8ff; }
+  .screen p { max-width: 620px; font-size: 15px; line-height: 1.6; color: #e8eef2; }
+  .screen .btn { pointer-events: auto; cursor: pointer; margin-top: 18px; font-size: 20px; font-weight: 800; color: #111; background: #ffd76e; border: none; border-radius: 8px; padding: 14px 42px; box-shadow: 0 4px 0 #b3541e; }
+  .screen .btn:hover { background: #ffe9a8; }
+  .screen .btn.secondary { background: #cfe8ff; box-shadow: 0 4px 0 #5a7a99; font-size: 16px; padding: 10px 28px; }
+  .keys { font-size: 13px; color: #9fb8cc; margin-top: 22px; line-height: 1.9; }
+  #save-line { font-size: 13px; color: #ffe9a8; margin-top: 14px; }
+  #title-screen { display: none; }
+  #pause-screen, #end-screen { display: none; }
+</style>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+<div id="damage"></div>
+
+<div class="hud" id="stats">
+  <div id="health-bar"><div id="health-fill"></div></div>
+  <div id="health-text">100 HP</div>
+  <div id="cash">$120</div>
+  <div id="stars"></div>
+  <div id="clock">09:05</div>
+</div>
+
+<div class="hud" id="objective" style="display:none">
+  <div id="objective-text"></div>
+  <div id="mission-timer"></div>
+</div>
+
+<div class="hud" id="minimap-label">SOLMAR BAY</div>
+<div class="hud" id="minimap-wrap"><canvas id="minimap" width="190" height="190"></canvas></div>
+
+<div class="hud" id="speed">0 km/h</div>
+<div class="hud" id="flash"></div>
+<div class="hud" id="crosshair"></div>
+
+<div class="hud" id="banner">
+  <div id="banner-title"></div>
+  <div id="banner-sub"></div>
+</div>
+
+<div class="hud" id="briefing">
+  <div id="briefing-title"></div>
+  <div id="briefing-text"></div>
+</div>
+
+<div class="screen" id="title-screen">
+  <h1>SOLMAR BAY</h1>
+  <h2>An open-world crime story &middot; a sun-soaked city, four jobs, one crew</h2>
+  <p>You are Jay Cruz, a driver fresh out of luck in Solmar Bay. Mara runs the crew
+  from Coral Row, Rico knows every shortcut, and the Solmar PD knows your face.
+  Steal cars, lose the tail, run the jobs — and try not to get busted.</p>
+  <button class="btn" id="start-btn">▶ START THE STORY</button>
+  <div id="save-line"></div>
+  <div class="keys" id="controls-line">
+    WASD move / drive &nbsp;·&nbsp; Mouse drag camera &nbsp;·&nbsp; SHIFT run &nbsp;·&nbsp; SPACE jump / handbrake<br>
+    E enter / exit car &nbsp;·&nbsp; CLICK shoot &nbsp;·&nbsp; F melee &nbsp;·&nbsp; R reload &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M mute
+  </div>
+  <p style="font-size:12px;color:#8fa8bc">A 100% original game. No real city, person or brand appears in it.<br>
+  Built for the make.fun “Make GTA 6” bounty · $1,666 in USDC · by @airdrop-menn</p>
+</div>
+
+<div class="screen" id="pause-screen">
+  <h1 style="font-size:44px">PAUSED</h1>
+  <p>Solmar Bay waits for no one — except right now.</p>
+  <button class="btn" id="resume-btn">RESUME</button>
+  <button class="btn secondary" id="mute-btn">🔊 Sound: On (M)</button>
+  <button class="btn secondary" id="restart-btn">↺ Restart at the plaza</button>
+</div>
+
+<div class="screen" id="end-screen">
+  <h1 style="font-size:44px" id="end-title"></h1>
+  <p id="end-text"></p>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="src/config.js"></script>
+<script src="src/rng.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/input.js"></script>
+<script src="src/effects.js"></script>
+<script src="src/city.js"></script>
+<script src="src/player.js"></script>
+<script src="src/vehicles.js"></script>
+<script src="src/traffic.js"></script>
+<script src="src/pedestrians.js"></script>
+<script src="src/police.js"></script>
+<script src="src/missions.js"></script>
+<script src="src/combat.js"></script>
+<script src="src/hud.js"></script>
+<script src="src/minimap.js"></script>
+<script src="src/shots.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
